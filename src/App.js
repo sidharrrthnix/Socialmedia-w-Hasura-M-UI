@@ -1,0 +1,61 @@
+import React, { useContext, useRef } from "react";
+import { useEffect } from "react";
+import {
+  Redirect,
+  Route,
+  Switch,
+  useHistory,
+  useLocation,
+} from "react-router-dom";
+import { AuthContext } from "./auth";
+import PostModal from "./components/post/PostModal";
+import EditProfilePage from "./pages/edit-profile";
+import ExplorePage from "./pages/explore";
+import FeedPage from "./pages/feed";
+import LoginPage from "./pages/login";
+import NotFoundPage from "./pages/not-found";
+import PostPage from "./pages/post";
+import ProfilePage from "./pages/profile";
+import SignUpPage from "./pages/signup";
+function App() {
+  const { authState } = useContext(AuthContext);
+  //   console.log(authState);
+  const isAuth = authState.status === "in";
+  const history = useHistory();
+  const location = useLocation();
+  //   console.log(history, location);
+  const prevLocation = useRef(location);
+  const modal = location.state?.modal;
+
+  useEffect(() => {
+    if (history.action !== "POP" && !modal) {
+      prevLocation.current = location;
+    }
+  }, [location, modal, history.action]);
+  const isModalOpen = modal && prevLocation.current !== location;
+  if (!isAuth) {
+    return (
+      <Switch>
+        <Route path="/accounts/login" component={LoginPage} />
+        <Route path="/accounts/emailsignup" component={SignUpPage} />
+        <Redirect to="/accounts/login" />
+      </Switch>
+    );
+  }
+  return (
+    <>
+      <Switch location={isModalOpen ? prevLocation.current : location}>
+        <Route exact path="/" component={FeedPage} />
+        <Route path="/explore" component={ExplorePage} />
+        <Route exact path="/:username" component={ProfilePage} />
+        <Route exact path="/p/:postId" component={PostPage} />
+        <Route path="/accounts/edit" component={EditProfilePage} />
+
+        <Route path="*" component={NotFoundPage} />
+      </Switch>
+      {isModalOpen && <Route exact path="/p/:postId" component={PostModal} />}
+    </>
+  );
+}
+
+export default App;
