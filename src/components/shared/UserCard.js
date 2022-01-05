@@ -5,7 +5,7 @@ import { defaultUser } from "../../data";
 import { useUserCardStyles } from "../../styles";
 
 function UserCard(props) {
-  const { user = defaultUser, avatarSize = "44" } = props;
+  const { user = defaultUser, avatarSize = "44", location } = props;
 
   const classes = useUserCardStyles({ avatarSize });
   const { username, name, profile_image } = user;
@@ -30,7 +30,7 @@ function UserCard(props) {
           variant="body2"
           className={classes.typography}
         >
-          {name}
+          {location || name}
         </Typography>
       </div>
     </div>

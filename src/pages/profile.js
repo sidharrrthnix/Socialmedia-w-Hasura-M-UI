@@ -1,3 +1,4 @@
+import { useApolloClient, useMutation, useQuery } from "@apollo/client";
 import {
   Avatar,
   Button,
@@ -10,18 +11,31 @@ import {
   Typography,
   Zoom,
 } from "@material-ui/core";
-import React, { useContext, useState } from "react";
-import { Link, useHistory } from "react-router-dom";
+import React, { useCallback, useContext, useState } from "react";
+import { Link, useHistory, useParams } from "react-router-dom";
+import { UserContext } from "../App";
 import { AuthContext } from "../auth";
 import ProfileTabs from "../components/profile/ProfileTabs";
 import Layout from "../components/shared/Layout";
+import LoadingScreen from "../components/shared/LoadingScreen";
 import ProfilePicture from "../components/shared/ProfilePicture";
-import { defaultCurrentUser } from "../data";
+import { FOLLOW_USER, UNFOLLOW_USER } from "../graphql/mutations";
+
+import { GET_USER_PROFILE } from "../graphql/querires";
 import { GearIcon } from "../icons";
 import { useProfilePageStyles } from "../styles";
 
 function ProfilePage() {
-  const isOwner = true;
+  const { username } = useParams();
+  const { data, loading } = useQuery(GET_USER_PROFILE, {
+    variables: { username },
+    fetchPolicy: "no-cache",
+  });
+
+  const { currentUserId } = useContext(UserContext);
+  const user = data?.users[0];
+  // console.log("data", user);
+  const isOwner = user?.id === currentUserId;
   const classes = useProfilePageStyles();
   const [showOptionsMenu, setOptionsMenu] = useState(false);
   const handleOptionsMenuClick = () => {
@@ -30,22 +44,22 @@ function ProfilePage() {
   const handleCloseMenu = () => {
     setOptionsMenu(false);
   };
+
+  if (loading) return <LoadingScreen />;
   return (
-    <Layout
-      title={`${defaultCurrentUser.name} (@${defaultCurrentUser.username})`}
-    >
+    <Layout title={`${user.name} (@${user.username})`}>
       <div className={classes.container}>
         <Hidden xsDown>
           <Card className={classes.cardLarge}>
-            <ProfilePicture isOwner={isOwner} />
+            <ProfilePicture isOwner={isOwner} image={user.profile_image} />
             <CardContent className={classes.cardContentLarge}>
               <ProfileNameSection
-                user={defaultCurrentUser}
+                user={user}
                 isOwner={isOwner}
                 handleOptionsMenuClick={handleOptionsMenuClick}
               />
-              <PostCountSection user={defaultCurrentUser} />
-              <NameBioSection user={defaultCurrentUser} />
+              <PostCountSection user={user} />
+              <NameBioSection user={user} />
             </CardContent>
           </Card>
         </Hidden>
@@ -53,31 +67,51 @@ function ProfilePage() {
           <Card className={classes.cardSmall}>
             <CardContent>
               <section className={classes.sectionSmall}>
-                <ProfilePicture size={77} isOwner={isOwner} />
+                <ProfilePicture
+                  size={77}
+                  isOwner={isOwner}
+                  image={user.profile_image}
+                />
                 <ProfileNameSection
-                  user={defaultCurrentUser}
+                  user={user}
                   isOwner={isOwner}
                   handleOptionsMenuClick={handleOptionsMenuClick}
                 />
               </section>
-              <NameBioSection user={defaultCurrentUser} />
+              <NameBioSection user={user} />
             </CardContent>
-            <PostCountSection user={defaultCurrentUser} />
+            <PostCountSection user={user} />
           </Card>
         </Hidden>
         {showOptionsMenu && <OptionsMenu handleCloseMenu={handleCloseMenu} />}
-        <ProfileTabs user={defaultCurrentUser} isOwner={isOwner} />
+        <ProfileTabs user={user} isOwner={isOwner} />
       </div>
     </Layout>
   );
 }
 const ProfileNameSection = ({ user, isOwner, handleOptionsMenuClick }) => {
   const classes = useProfilePageStyles();
+  const { currentUserId, followingIds, followersIds } = useContext(UserContext);
   const [showUnfollowDialog, setUnfollowDialog] = useState(false);
   let followButton;
-  const isFollowing = false;
-  const isFollower = false;
-
+  // const isFollowing = false;
+  // const isFollower = false;
+  const isAlreadyFollowing = followingIds.some((id) => id === user.id);
+  const [isFollowing, setFollowing] = useState(isAlreadyFollowing);
+  const isFollower = !isFollowing && followersIds.some((id) => id === user.id);
+  const variables = {
+    userIdToFollow: user.id,
+    currentUserId,
+  };
+  const [followUser] = useMutation(FOLLOW_USER);
+  function handleFollowUser() {
+    setFollowing(true);
+    followUser({ variables });
+  }
+  const onUnfollowUser = useCallback(() => {
+    setFollowing(false);
+    setUnfollowDialog(false);
+  }, []);
   if (isFollowing) {
     followButton = (
       <Button
@@ -90,13 +124,23 @@ const ProfileNameSection = ({ user, isOwner, handleOptionsMenuClick }) => {
     );
   } else if (isFollower) {
     followButton = (
-      <Button variant="contained" color="primary" className={classes.button}>
+      <Button
+        onClick={handleFollowUser}
+        variant="contained"
+        color="primary"
+        className={classes.button}
+      >
         Follow Back
       </Button>
     );
   } else {
     followButton = (
-      <Button variant="contained" color="primary" className={classes.button}>
+      <Button
+        onClick={handleFollowUser}
+        variant="contained"
+        color="primary"
+        className={classes.button}
+      >
         Follow
       </Button>
     );
@@ -152,7 +196,11 @@ const ProfileNameSection = ({ user, isOwner, handleOptionsMenuClick }) => {
         </section>
       </Hidden>
       {showUnfollowDialog && (
-        <UnfollowDialog user={user} onClose={() => setUnfollowDialog(false)} />
+        <UnfollowDialog
+          onUnfollowUser={onUnfollowUser}
+          user={user}
+          onClose={() => setUnfollowDialog(false)}
+        />
       )}
     </>
   );
@@ -169,7 +217,7 @@ const PostCountSection = ({ user }) => {
         {options.map((option) => (
           <div key={option} className={classes.followingText}>
             <Typography className={classes.followingCount}>
-              {user[option].length}
+              {user[`${option}_aggregate`].aggregate.count}
             </Typography>
             <Hidden xsDown>
               <Typography>{option}</Typography>
@@ -200,15 +248,25 @@ const NameBioSection = ({ user }) => {
     </section>
   );
 };
-const UnfollowDialog = ({ user, onClose }) => {
+const UnfollowDialog = ({ user, onClose, onUnfollowUser }) => {
   const classes = useProfilePageStyles();
+  const { currentUserId } = useContext(UserContext);
+  const [unfollowUser] = useMutation(UNFOLLOW_USER);
+  function handleUnfollowUser() {
+    const variables = {
+      userIdToFollow: user.id,
+      currentUserId,
+    };
+    unfollowUser({ variables });
+    onUnfollowUser();
+  }
   return (
     <Dialog
       open
       classes={{
         scrollPaper: classes.unfollowDialogScrollPaper,
       }}
-      onClose
+      onClose={onClose}
       TransitionComponent={Zoom}
     >
       <div className={classes.wrapper}>
@@ -226,7 +284,9 @@ const UnfollowDialog = ({ user, onClose }) => {
         Unfollow @{user.username} ?
       </Typography>
       <Divider />
-      <Button className={classes.unfollowButton}>Unfollow</Button>
+      <Button onClick={handleUnfollowUser} className={classes.unfollowButton}>
+        Unfollow
+      </Button>
       <Divider />
       <Button onClick={onClose} className={classes.cancelButton}>
         Cancel
@@ -240,9 +300,11 @@ const OptionsMenu = ({ handleCloseMenu }) => {
   const { signOut } = useContext(AuthContext);
   const [showLogoutMessage, setLogoutMessage] = useState(false);
   const history = useHistory();
+  const client = useApolloClient();
   const handleLogoutClick = () => {
     setLogoutMessage(true);
-    setTimeout(() => {
+    setTimeout(async () => {
+      await client.clearStore();
       signOut();
       history.push("/accounts/login");
     }, 1500);

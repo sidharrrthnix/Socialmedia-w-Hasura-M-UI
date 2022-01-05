@@ -1,6 +1,8 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-admin.initializeApp(functions.config().firebase);
+admin.initializeApp({
+  databaseURL: "https://instar-12-default-rtdb.firebaseio.com/",
+});
 
 // On sign up.
 exports.processSignUp = functions.auth.user().onCreate((user) => {

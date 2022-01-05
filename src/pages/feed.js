@@ -1,37 +1,47 @@
+import { useQuery } from "@apollo/client";
 import { Hidden } from "@material-ui/core";
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
+import { UserContext } from "../App";
 import FeedPostSkeleton from "../components/feed/FeedPostSkeleton";
 import FeedSideSuggestions from "../components/feed/FeedSideSuggestions";
 import Layout from "../components/shared/Layout";
 import LoadingScreen from "../components/shared/LoadingScreen";
 import UserCard from "../components/shared/UserCard";
 import { getDefaultPost } from "../data";
+import { GET_FEED } from "../graphql/querires";
 import { LoadingLargeIcon } from "../icons";
 import { useFeedPageStyles } from "../styles";
 // import FeedPost from "../components/feed/FeedPost";
 const FeedPost = React.lazy(() => import("../components/feed/FeedPost"));
 
 function FeedPage() {
-  let loading = false;
+  const { me, feedIds } = useContext(UserContext);
+
   const classes = useFeedPageStyles();
-  const [isEndOfFeed] = useState(false);
+  const [isEndOfFeed, setEndOfFeed] = useState(false);
+  const variables = { limit: 30, feedIds };
+  const { data, loading } = useQuery(GET_FEED, { variables });
+  useEffect(() => {
+    if (data) {
+      setEndOfFeed(true);
+    }
+  }, [data]);
+
   if (loading) return <LoadingScreen />;
   return (
     <Layout>
       <div className={classes.container}>
         <div>
-          {Array.from({ length: 10 }, () => getDefaultPost()).map(
-            (post, index) => (
-              <React.Suspense key={post.id} fallback={<FeedPostSkeleton />}>
-                <FeedPost post={post} index={index} />
-              </React.Suspense>
-            )
-          )}
+          {data?.posts.map((post, index) => (
+            <React.Suspense key={post.id} fallback={<FeedPostSkeleton />}>
+              <FeedPost post={post} index={index} />
+            </React.Suspense>
+          ))}
         </div>
         <Hidden smDown>
           <div className={classes.sidebarContainer}>
             <div className={classes.sidebarWrapper}>
-              <UserCard avatarSize={50} />
+              <UserCard user={me} avatarSize={50} />
               <FeedSideSuggestions />
             </div>
           </div>

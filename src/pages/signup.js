@@ -38,7 +38,8 @@ function SignUpPage() {
       query: CHECK_IF_USERNAME_TAKEN,
       variables,
     });
-    console.log(response);
+    const isUsernameValid = response.data.users.length === 0;
+    return isUsernameValid;
   };
   const errorIcon = (
     <InputAdornment>
@@ -55,7 +56,9 @@ function SignUpPage() {
     try {
       setError("");
       await signUpWithEmailAndPassword(data);
-      history.push("/");
+      setTimeout(() => {
+        history.push("/");
+      }, 10);
     } catch (e) {
       console.error("Error signing up", e);
       handleError(e);

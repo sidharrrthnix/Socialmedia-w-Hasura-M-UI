@@ -1,3 +1,1 @@
-# instagram-react12
-# Socialmedia-w-Hasura-M-UI
-# Socialmedia-w-Hasura-M-UI
+Social Media - Vercel, React,Material-Ui , Hasura and Apollo
